@@ -160,9 +160,8 @@ async def submit_job(job_request: ETLJobRequest):
 
         raw_objs: List[ClinicalMeasurement] = []
         proc_objs: List[ProcessedMeasurement] = []
-        file_size = os.path.getsize(filepath)
 
-        # Branch: large file streaming async
+        # large file streaming async
         total = await count_lines(filepath)
         async with aiofiles.open(filepath, mode="r") as af:
             header = await af.readline()
