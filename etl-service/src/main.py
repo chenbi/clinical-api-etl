@@ -244,6 +244,9 @@ async def submit_job(job_request: ETLJobRequest):
                 "message": f"Loaded {len(proc_objs)} processed rows (and {len(raw_objs)} raw rows)",
             },
         )
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         redis_client.hset(job_id, mapping={"status": "failed", "message": str(e)})
