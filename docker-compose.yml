@@ -1,4 +1,10 @@
 services:
+  redis:
+    image: redis:6-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
   api:
     build: ./api-service
     ports:
@@ -11,19 +17,21 @@ services:
       - DATABASE_URL=postgresql://user:pass@postgres:5432/clinical_data
       - ETL_SERVICE_URL=http://etl:8000
     restart: unless-stopped
-  
+
   etl:
-    build: ./etl-service  
+    build: ./etl-service
     ports:
       - "8000:8000"
     depends_on:
       - postgres
+      - redis
     environment:
       - DATABASE_URL=postgresql://user:pass@postgres:5432/clinical_data
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./data:/app/data
     restart: unless-stopped
-  
+
   postgres:
     image: public.ecr.aws/docker/library/postgres:15
     environment:
@@ -38,5 +46,3 @@ services:
     tmpfs:
       - /var/lib/postgresql/data:noexec,nosuid,size=512m
     restart: unless-stopped
-
-
