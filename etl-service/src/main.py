@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 import uvicorn
 import redis
-import pandas as pd
 import asyncio
 import aiofiles
 from fastapi import FastAPI, HTTPException
@@ -261,20 +260,22 @@ async def submit_job(job_request: ETLJobRequest):
 @app.get("/jobs/{job_id}/status", response_model=ETLJobStatus)
 async def get_job_status(job_id: str):
     data = redis_client.hgetall(job_id)
-    if not data:
+    # Guard against non-dict or missing status key
+    if not isinstance(data, dict) or b"status" not in data:
         raise HTTPException(status_code=404, detail="Job not found")
     return ETLJobStatus(
         jobId=job_id,
         status=data[b"status"].decode(),
-        progress=int(data[b"progress"]),
-        message=data[b"message"].decode(),
+        progress=int(data.get(b"progress", 0)),
+        message=data.get(b"message", b"").decode(),
     )
 
 
 @app.get("/jobs/{job_id}")
 async def get_job_details(job_id: str):
     data = redis_client.hgetall(job_id)
-    if not data:
+    # Guard against non-dict or missing status key
+    if not isinstance(data, dict) or b"status" not in data:
         raise HTTPException(status_code=404, detail="Job not found")
     return {k.decode(): v.decode() for k, v in data.items()}
 
