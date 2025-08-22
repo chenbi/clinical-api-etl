@@ -85,8 +85,6 @@ async def health_check():
 
 
 # ORM helpers
-
-
 def get_or_create_participant(session, participant_id: str, study_id: str) -> None:
     exists = session.query(Participant).filter_by(participant_id=participant_id).first()
     if not exists:
@@ -183,21 +181,41 @@ async def submit_job(job_request: ETLJobRequest):
                         quality_score=rec.quality_score,
                     )
                 )
-                # Processed row if passes
                 if rec.quality_score >= 0.9:
-                    get_or_create_participant(session, rec.participant_id, study_id)
-                    uid = get_or_create_unit(session, getattr(rec, "unit", "") or "")
-                    tid = get_or_create_type(session, rec.measurement_type, uid)
-                    proc_objs.append(
-                        ProcessedMeasurement(
-                            study_id=study_id,
-                            participant_id=rec.participant_id,
-                            measurement_type_id=tid,
-                            measurement_value=rec.value,
-                            quality_score=rec.quality_score,
-                            recorded_at=rec.timestamp,
+                    raw_val = str(rec.value)
+                    syst = dias = val = None
+                    if "/" in raw_val:
+                        try:
+                            h, l = raw_val.split("/", 1)
+                            syst = float(h)
+                            dias = float(l)
+                        except ValueError:
+                            pass
+                    else:
+                        try:
+                            val = float(raw_val)
+                        except ValueError:
+                            pass
+
+                    if val is not None or (syst is not None and dias is not None):
+                        get_or_create_participant(session, rec.participant_id, study_id)
+                        uid = get_or_create_unit(
+                            session, getattr(rec, "unit", "") or ""
                         )
-                    )
+                        tid = get_or_create_type(session, rec.measurement_type, uid)
+                        proc_objs.append(
+                            ProcessedMeasurement(
+                                study_id=study_id,
+                                participant_id=rec.participant_id,
+                                measurement_type_id=tid,
+                                measurement_value=val,
+                                systolic=syst,
+                                diastolic=dias,
+                                quality_score=rec.quality_score,
+                                recorded_at=rec.timestamp,
+                                attributes={"raw": raw_val},
+                            )
+                        )
                 redis_client.hset(job_id, "progress", int(idx / total * 100))
         else:
             # Branch: large file streaming async
@@ -208,8 +226,7 @@ async def submit_job(job_request: ETLJobRequest):
                 idx = 0
                 async for line in af:
                     idx += 1
-                    parts = line.strip().split(",")
-                    rec = dict(zip(headers, parts))
+                    rec = dict(zip(headers, line.strip().split(",")))
                     # Raw row
                     try:
                         raw_objs.append(
@@ -230,7 +247,25 @@ async def submit_job(job_request: ETLJobRequest):
                     # Processed row
                     try:
                         qs = float(rec.get("quality_score", 0))
-                        if qs >= 0.9:
+                    except:
+                        qs = None
+                    if qs is not None and qs >= 0.9:
+                        raw_val = rec["value"]
+                        syst = dias = val = None
+                        if "/" in raw_val:
+                            try:
+                                h, l = raw_val.split("/", 1)
+                                syst = float(h)
+                                dias = float(l)
+                            except:
+                                pass
+                        else:
+                            try:
+                                val = float(raw_val)
+                            except:
+                                pass
+
+                        if val is not None or (syst is not None and dias is not None):
                             get_or_create_participant(
                                 session, rec["participant_id"], study_id
                             )
@@ -243,21 +278,22 @@ async def submit_job(job_request: ETLJobRequest):
                                     study_id=study_id,
                                     participant_id=rec["participant_id"],
                                     measurement_type_id=tid,
-                                    measurement_value=float(rec["value"]),
+                                    measurement_value=val,
+                                    systolic=syst,
+                                    diastolic=dias,
                                     quality_score=qs,
                                     recorded_at=datetime.fromisoformat(
                                         rec["timestamp"]
                                     ),
+                                    attributes={"raw": raw_val},
                                 )
                             )
-                    except:
-                        pass
                     redis_client.hset(job_id, "progress", int(idx / total * 100))
 
         if not raw_objs:
             raise HTTPException(status_code=400, detail="No records found in file")
 
-        # Bulk save
+        # Bulk save both raw and processed
         session.bulk_save_objects(raw_objs)
         session.bulk_save_objects(proc_objs)
         session.commit()

@@ -1,6 +1,6 @@
 from datetime import datetime
 from uuid import uuid4
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -41,7 +41,8 @@ class Participant(Base):
     __tablename__ = "participants"
     participant_id = Column(String, primary_key=True)
     study_id = Column(String, ForeignKey("studies.study_id"), nullable=False)
-    demographic = Column(String)
+    enrolled_at = Column(DateTime)
+    demographic = Column(JSON)
 
     study = relationship("Study", back_populates="participants")
     processed_measurements = relationship(
@@ -88,10 +89,13 @@ class ProcessedMeasurement(Base):
     measurement_type_id = Column(
         Integer, ForeignKey("measurement_types.measurement_type_id"), nullable=False
     )
-    measurement_value = Column(Float, nullable=False)
+    measurement_value = Column(Float, nullable=True)
+    systolic = Column(Float, nullable=True)
+    diastolic = Column(Float, nullable=True)
     quality_score = Column(Float, nullable=False)
     recorded_at = Column(DateTime, nullable=False)
     loaded_at = Column(DateTime, default=datetime.utcnow)
+    attributes = Column(JSON, default=dict)
 
     study = relationship("Study", back_populates="processed_measurements")
     participant = relationship("Participant", back_populates="processed_measurements")

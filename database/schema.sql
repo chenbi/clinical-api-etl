@@ -71,10 +71,13 @@ CREATE TABLE IF NOT EXISTS processed_measurements (
   study_id TEXT NOT NULL REFERENCES studies(study_id),
   participant_id TEXT NOT NULL REFERENCES participants(participant_id),
   measurement_type_id INT NOT NULL REFERENCES measurement_types(measurement_type_id),
-  measurement_value DOUBLE PRECISION NOT NULL,
+  measurement_value DOUBLE PRECISION,
+  systolic DOUBLE PRECISION,
+  diastolic DOUBLE PRECISION,
   quality_score REAL NOT NULL CHECK (quality_score BETWEEN 0 AND 1),
   recorded_at TIMESTAMPTZ NOT NULL,
-  loaded_at TIMESTAMPTZ DEFAULT NOW()
+  loaded_at TIMESTAMPTZ DEFAULT NOW(),
+  attributes JSONB DEFAULT '{}'::JSONB
 );
 
 -- Data quality reports
@@ -99,7 +102,6 @@ CREATE TABLE IF NOT EXISTS measurement_aggregations (
   max_value DOUBLE PRECISION,
   PRIMARY KEY (aggregation_date, study_id, measurement_type_id)
 );
-
 
 CREATE INDEX IF NOT EXISTS idx_clinical_measurements_study_id ON clinical_measurements(study_id);
 CREATE INDEX IF NOT EXISTS idx_clinical_measurements_participant_id ON clinical_measurements(participant_id);
