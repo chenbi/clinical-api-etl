@@ -17,18 +17,21 @@ A microservices-based data pipeline for processing clinical trial data. The syst
 ## Services
 
 ### API Service (TypeScript/Node.js)
+
 - ETL job management endpoints
 - Data querying capabilities
 - Status tracking functionality
 - Port: 3000
 
 ### ETL Service (Python/FastAPI)
+
 - CSV data processing
 - Data validation and transformation
 - Database integration
 - Port: 8000
 
 ### PostgreSQL Database
+
 - Clinical data storage
 - ETL job tracking
 - Port: 5432
@@ -53,6 +56,7 @@ curl http://localhost:8000/health  # ETL Service
 ## Development Setup
 
 ### API Service Development
+
 ```bash
 cd api-service
 npm install
@@ -60,6 +64,7 @@ npm run dev  # Runs on port 3000
 ```
 
 ### ETL Service Development
+
 ```bash
 cd etl-service
 pip install -r requirements.txt
@@ -69,6 +74,7 @@ uvicorn src.main:app --reload  # Runs on port 8000
 ## API Documentation
 
 ### Submit ETL Job
+
 ```bash
 curl -X POST http://localhost:3000/api/etl/jobs \
   -H "Content-Type: application/json" \
@@ -79,11 +85,13 @@ curl -X POST http://localhost:3000/api/etl/jobs \
 ```
 
 ### Query Data
+
 ```bash
 curl "http://localhost:3000/api/data?studyId=STUDY001&measurementType=glucose"
 ```
 
 ### Get Job Status
+
 ```bash
 curl http://localhost:3000/api/etl/jobs/{job-id}/status
 ```
@@ -91,10 +99,12 @@ curl http://localhost:3000/api/etl/jobs/{job-id}/status
 ## Sample Data
 
 Sample CSV files are provided in the `data/` directory:
+
 - `sample_study001.csv` - Glucose, cholesterol, weight, height measurements
 - `sample_study002.csv` - Blood pressure, heart rate measurements
 
 ### Data Format
+
 ```csv
 study_id,participant_id,measurement_type,value,unit,timestamp,site_id,quality_score
 STUDY001,P001,glucose,95.5,mg/dL,2024-01-15T09:30:00Z,SITE_A,0.98
@@ -108,6 +118,9 @@ cd api-service
 npm test
 
 # ETL Service
+export DATABASE_URL="sqlite:///./test.db"
+export REDIS_URL="redis://localhost:6379/0"
+export DATA_DIR="./data"
 cd etl-service
 python -m pytest
 ```
@@ -151,6 +164,7 @@ clinical-api-etl/
 ### Common Issues
 
 #### Services Won't Start
+
 ```bash
 # Check if ports are already in use
 netstat -tulpn | grep -E ':(3000|8000|5432)'
@@ -162,6 +176,7 @@ sudo lsof -ti:5432 | xargs kill -9
 ```
 
 #### Docker Issues
+
 ```bash
 # Clean up Docker resources
 docker compose down -v
@@ -173,6 +188,7 @@ docker compose up
 ```
 
 #### Database Connection Issues
+
 ```bash
 # Check if PostgreSQL is running
 docker compose ps
@@ -186,6 +202,7 @@ docker compose up postgres
 ```
 
 #### Permission Issues (Linux/macOS)
+
 ```bash
 # Fix file permissions
 sudo chown -R $USER:$USER .
@@ -195,6 +212,7 @@ chmod -R 755 .
 ### Platform-Specific Setup
 
 #### Windows (WSL2 Recommended)
+
 ```powershell
 # Install WSL2 and Docker Desktop
 wsl --install
@@ -202,6 +220,7 @@ wsl --install
 ```
 
 #### macOS
+
 ```bash
 # Install Docker Desktop for Mac
 brew install --cask docker
@@ -209,6 +228,7 @@ brew install --cask docker
 ```
 
 #### Linux
+
 ```bash
 # Install Docker and Docker Compose
 sudo apt update
@@ -220,6 +240,7 @@ sudo usermod -aG docker $USER
 ### Service Health Checks
 
 #### API Service (Port 3000)
+
 ```bash
 # Health check
 curl http://localhost:3000/health
@@ -229,6 +250,7 @@ curl http://localhost:3000/health
 ```
 
 #### ETL Service (Port 8000)
+
 ```bash
 # Health check
 curl http://localhost:8000/health
@@ -238,6 +260,7 @@ curl http://localhost:8000/docs
 ```
 
 #### Database (Port 5432)
+
 ```bash
 # Connection test
 docker exec -it clinical-api-etl-postgres-1 psql -U user -d clinical_data -c "SELECT version();"
@@ -246,6 +269,7 @@ docker exec -it clinical-api-etl-postgres-1 psql -U user -d clinical_data -c "SE
 ### Environment Variables
 
 Default configuration (can be overridden):
+
 ```env
 # Database
 POSTGRES_USER=user
@@ -271,6 +295,7 @@ PYTHONPATH=/app/src
 ### Getting Help
 
 If you encounter issues:
+
 1. Check service logs: `docker compose logs [service-name]`
 2. Verify all services are running: `docker compose ps`
 3. Ensure ports 3000, 8000, and 5432 are available
