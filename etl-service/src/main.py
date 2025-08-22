@@ -162,133 +162,73 @@ async def submit_job(job_request: ETLJobRequest):
         proc_objs: List[ProcessedMeasurement] = []
         file_size = os.path.getsize(filepath)
 
-        # Branch: small file via pandas
-        if pd and file_size <= stream_threshold:
-            df = pd.read_csv(filepath, parse_dates=["timestamp"])
-            total = len(df)
-            for idx, rec in enumerate(df.itertuples(index=False), start=1):
+        # Branch: large file streaming async
+        total = await count_lines(filepath)
+        async with aiofiles.open(filepath, mode="r") as af:
+            header = await af.readline()
+            headers = [h.strip() for h in header.split(",")]
+            idx = 0
+            async for line in af:
+                idx += 1
+                rec = dict(zip(headers, line.strip().split(",")))
                 # Raw row
-                raw_objs.append(
-                    ClinicalMeasurement(
-                        id=str(uuid4()),
-                        study_id=study_id,
-                        participant_id=rec.participant_id,
-                        measurement_type=rec.measurement_type,
-                        value=str(rec.value),
-                        unit=getattr(rec, "unit", None),
-                        timestamp=rec.timestamp,
-                        site_id="",
-                        quality_score=rec.quality_score,
+                try:
+                    raw_objs.append(
+                        ClinicalMeasurement(
+                            id=str(uuid4()),
+                            study_id=study_id,
+                            participant_id=rec["participant_id"],
+                            measurement_type=rec["measurement_type"],
+                            value=rec["value"],
+                            unit=rec.get("unit"),
+                            timestamp=datetime.fromisoformat(rec["timestamp"]),
+                            site_id=rec.get("site_id", ""),
+                            quality_score=float(rec.get("quality_score", 0)),
+                        )
                     )
-                )
-                if rec.quality_score >= 0.9:
-                    raw_val = str(rec.value)
+                except:
+                    continue
+                # Processed row
+                try:
+                    qs = float(rec.get("quality_score", 0))
+                except:
+                    qs = None
+                if qs is not None and qs >= 0.9:
+                    raw_val = rec["value"]
                     syst = dias = val = None
                     if "/" in raw_val:
                         try:
                             h, l = raw_val.split("/", 1)
                             syst = float(h)
                             dias = float(l)
-                        except ValueError:
+                        except:
                             pass
                     else:
                         try:
                             val = float(raw_val)
-                        except ValueError:
+                        except:
                             pass
 
                     if val is not None or (syst is not None and dias is not None):
-                        get_or_create_participant(session, rec.participant_id, study_id)
-                        uid = get_or_create_unit(
-                            session, getattr(rec, "unit", "") or ""
+                        get_or_create_participant(
+                            session, rec["participant_id"], study_id
                         )
-                        tid = get_or_create_type(session, rec.measurement_type, uid)
+                        uid = get_or_create_unit(session, rec.get("unit", "") or "")
+                        tid = get_or_create_type(session, rec["measurement_type"], uid)
                         proc_objs.append(
                             ProcessedMeasurement(
                                 study_id=study_id,
-                                participant_id=rec.participant_id,
+                                participant_id=rec["participant_id"],
                                 measurement_type_id=tid,
                                 measurement_value=val,
                                 systolic=syst,
                                 diastolic=dias,
-                                quality_score=rec.quality_score,
-                                recorded_at=rec.timestamp,
+                                quality_score=qs,
+                                recorded_at=datetime.fromisoformat(rec["timestamp"]),
                                 attributes={"raw": raw_val},
                             )
                         )
                 redis_client.hset(job_id, "progress", int(idx / total * 100))
-        else:
-            # Branch: large file streaming async
-            total = await count_lines(filepath)
-            async with aiofiles.open(filepath, mode="r") as af:
-                header = await af.readline()
-                headers = [h.strip() for h in header.split(",")]
-                idx = 0
-                async for line in af:
-                    idx += 1
-                    rec = dict(zip(headers, line.strip().split(",")))
-                    # Raw row
-                    try:
-                        raw_objs.append(
-                            ClinicalMeasurement(
-                                id=str(uuid4()),
-                                study_id=study_id,
-                                participant_id=rec["participant_id"],
-                                measurement_type=rec["measurement_type"],
-                                value=rec["value"],
-                                unit=rec.get("unit"),
-                                timestamp=datetime.fromisoformat(rec["timestamp"]),
-                                site_id=rec.get("site_id", ""),
-                                quality_score=float(rec.get("quality_score", 0)),
-                            )
-                        )
-                    except:
-                        continue
-                    # Processed row
-                    try:
-                        qs = float(rec.get("quality_score", 0))
-                    except:
-                        qs = None
-                    if qs is not None and qs >= 0.9:
-                        raw_val = rec["value"]
-                        syst = dias = val = None
-                        if "/" in raw_val:
-                            try:
-                                h, l = raw_val.split("/", 1)
-                                syst = float(h)
-                                dias = float(l)
-                            except:
-                                pass
-                        else:
-                            try:
-                                val = float(raw_val)
-                            except:
-                                pass
-
-                        if val is not None or (syst is not None and dias is not None):
-                            get_or_create_participant(
-                                session, rec["participant_id"], study_id
-                            )
-                            uid = get_or_create_unit(session, rec.get("unit", "") or "")
-                            tid = get_or_create_type(
-                                session, rec["measurement_type"], uid
-                            )
-                            proc_objs.append(
-                                ProcessedMeasurement(
-                                    study_id=study_id,
-                                    participant_id=rec["participant_id"],
-                                    measurement_type_id=tid,
-                                    measurement_value=val,
-                                    systolic=syst,
-                                    diastolic=dias,
-                                    quality_score=qs,
-                                    recorded_at=datetime.fromisoformat(
-                                        rec["timestamp"]
-                                    ),
-                                    attributes={"raw": raw_val},
-                                )
-                            )
-                    redis_client.hset(job_id, "progress", int(idx / total * 100))
 
         if not raw_objs:
             raise HTTPException(status_code=400, detail="No records found in file")
