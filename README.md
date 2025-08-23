@@ -1,9 +1,11 @@
 # Assessment - Clinical Data ETL Pipeline
 
 ## Project Overview
+
 Complete a partially-built microservices data pipeline for processing clinical trial data.
 
 ## Time Expectation
+
 **4-6 hours** to complete all three tasks.
 
 **We encourage you to use AI assistants** such as ChatGPT, Claude, GitHub Copilot, etc. You are welcome to leverage AI tools throughout your development process to help solve problems, implement features, and optimize your workflow. Demonstrating effective use of AI can be a valuable part of this assessment. We're evaluating your problem-solving approach and implementation quality, not your ability to memorize syntax.
@@ -13,11 +15,12 @@ Complete a partially-built microservices data pipeline for processing clinical t
 This assessment is provided as a **zip file** containing a partially-implemented microservices project. You will:
 
 1. **Extract** the project files
-2. **Push** to your public GitHub repository  
+2. **Push** to your public GitHub repository
 3. **Implement** the required features with regular commits
 4. **Share** your public repository URL for review with [george.mitra@regeneron.com](mailto:george.mitra@regeneron.com)
 
 ## What We'll Review
+
 - **Problem-solving approach**: How you break down and tackle complex challenges
 - **Commit history**: Regular commits showing development progress and thought process
 - **Code quality**: Architecture decisions, clean implementation, and best practices
@@ -30,18 +33,22 @@ This assessment is provided as a **zip file** containing a partially-implemented
 ## Getting Started
 
 ### What You'll Start With
+
 Bootstrap application with three Docker services:
 
 #### 1. API Service (TypeScript/Node.js) - 95% Complete ✅
+
 - ETL job triggering (`POST /api/etl/jobs`) and data querying (`GET /api/data`) endpoints complete
 - **Your task**: Add status tracking endpoint (`GET /api/etl/jobs/{id}/status`)
 
 #### 2. ETL Service (Python/FastAPI) - 50% Complete ⚠️
+
 - Job submission and status endpoints functional
 - Sample data processing framework
 - **Your task**: Complete the data processing pipeline and add quality validation
 
 #### 3. PostgreSQL Database - Basic Schema ⚠️
+
 - Tables created automatically on startup
 - **Your task**: Design optimal schema and indexes for analytical queries
 
@@ -83,17 +90,20 @@ curl http://localhost:8000/health  # ETL Service
 Implement the `GET /api/etl/jobs/{id}/status` endpoint in the API service.
 
 ### Files to Modify:
+
 1. `api-service/src/routes/etl.routes.ts` - Add route
-2. `api-service/src/controllers/etl.controller.ts` - Add controller method  
+2. `api-service/src/controllers/etl.controller.ts` - Add controller method
 3. `api-service/src/services/etl.service.ts` - Add service method
 
 ### Requirements:
+
 - Connect to ETL service (`http://etl:8000/jobs/{id}/status`)
 - Handle invalid job IDs (404 error)
 - Handle connection errors gracefully
 - Return consistent JSON response format
 
 ### Expected Response:
+
 ```json
 {
   "success": true,
@@ -112,6 +122,7 @@ Implement the `GET /api/etl/jobs/{id}/status` endpoint in the API service.
 Complete the ETL data processing pipeline and add quality validation in the Python service.
 
 **Missing implementations:**
+
 - Data transformation pipeline
 - Quality validation rules
 - Database loading
@@ -127,6 +138,7 @@ Design and implement an optimized schema and indexes for analytical queries in P
 - Performance optimization
 
 **Example Business Questions to Optimize For:**
+
 - Which studies have the highest data quality scores?
 - What are the glucose trends for a specific participant over time?
 - How do measurement counts compare across different research sites?
@@ -170,10 +182,34 @@ curl "http://localhost:3000/api/data?studyId=STUDY001"
 ```
 
 ## Submission Instructions
+
 Submit your project by emailing your Git repository URL and any notes to [george.mitra@regeneron.com](mailto:george.mitra@regeneron.com).
 
 ### Final Submission Checklist
+
 - [ ] Ensure all services start successfully with `docker compose up --build`
 - [ ] Repository is public and URL is shared
 - [ ] Brief explanation of AI tool usage is included in the repository
 - [ ] Additional comments or notes about your approach are included (optional)
+
+## JSONB Attributes Rationale
+
+The `attributes` JSONB column in `processed_measurements` (and the `demographic` JSONB in `participants`) provide a flexible, schemaless extension point without frequent schema changes:
+
+### Evolving requirements
+
+New data sources may include extra fields (e.g. device IDs, technician notes, batch tags) that don’t yet have dedicated columns. By dumping them into JSONB, we can onboard those fields immediately—and only later promote the most important ones into first-class columns as needed.
+
+### Rich debugging & audit trails
+
+Storing the original raw value or custom parsing hints alongside each record makes it easy to reproduce or troubleshoot oddball rows in production. We can even index on nested keys (for example, `attributes->>'raw' ILIKE '%error%'`) to find problem cases quickly.
+
+### Ad-hoc analytics
+
+Analysts often want to slice and dice on one-off or rarely used properties—say a sensor’s firmware version or a lab’s assay code—without requiring a database migration. JSONB lets us write temporary reports or dashboards on these properties directly in SQL.
+
+### Performance at scale
+
+PostgreSQL’s JSONB is fast (compressed on disk, GIN-indexable) and lets us keep our core schema lean while still supporting arbitrary metadata.
+
+In short, JSONB gives us a “catch-all” slot for growth, observability, and agility—while preserving the performance, integrity, and simplicity of our relational core.
