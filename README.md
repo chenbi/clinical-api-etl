@@ -140,12 +140,91 @@ Design and implement an optimized schema and indexes for analytical queries in P
 **Example Business Questions to Optimize For:**
 
 - Which studies have the highest data quality scores?
+
+```sql
+SELECT
+  study_id,
+  avg_quality
+FROM data_quality_reports
+ORDER BY avg_quality DESC
+LIMIT 10;
+```
+
 - What are the glucose trends for a specific participant over time?
+
+```sql
+SELECT
+  pm.recorded_at,
+  pm.measurement_value AS glucose_value
+FROM processed_measurements pm
+JOIN measurement_types mt
+  ON pm.measurement_type_id = mt.measurement_type_id
+WHERE
+  mt.name = 'glucose'
+  AND pm.participant_id = 'PARTICIPANT_123'
+ORDER BY pm.recorded_at;
+```
+
 - How do measurement counts compare across different research sites?
+
+```sql
+SELECT
+  site_id,
+  COUNT(*) AS measurement_count
+FROM clinical_measurements
+GROUP BY site_id
+ORDER BY measurement_count DESC;
+```
+
 - Which measurements have quality scores below our threshold?
+
+```sql
+SELECT
+  id,
+  study_id,
+  participant_id,
+  measurement_type,
+  value,
+  quality_score,
+  timestamp
+FROM clinical_measurements
+WHERE quality_score < 0.8
+ORDER BY quality_score ASC;
+```
+
 - What clinical data was collected in the last 30 days?
+
+```sql
+SELECT
+  *
+FROM clinical_measurements
+WHERE timestamp >= NOW() - INTERVAL '30 days'
+ORDER BY timestamp DESC;
+```
+
 - How many participants are enrolled in each study?
+
+```sql
+SELECT
+  study_id,
+  COUNT(*) AS participant_count
+FROM participants
+GROUP BY study_id
+ORDER BY participant_count DESC;
+```
+
 - What's the average BMI for participants in a specific study?
+
+```sql
+SELECT
+  AVG(pm.measurement_value) AS avg_bmi
+FROM processed_measurements pm
+JOIN measurement_types mt
+  ON pm.measurement_type_id = mt.measurement_type_id
+WHERE
+  mt.name = 'bmi'
+  AND pm.study_id = 'STUDY_ABC';
+```
 
 **Your schema should efficiently support these types of analytical queries.**
 
