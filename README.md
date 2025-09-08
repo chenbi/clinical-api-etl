@@ -226,6 +226,73 @@ WHERE
   AND pm.study_id = 'STUDY_ABC';
 ```
 
+- insert into data_quality_reports table
+
+```sql
+INSERT INTO data_quality_reports (
+  study_id,
+  generated_at,
+  total_records,
+  valid_records,
+  invalid_records,
+  avg_quality
+)
+SELECT
+  study_id,
+  NOW() AS generated_at,
+  COUNT(*)                                     AS total_records,
+  SUM(CASE WHEN quality_score >= 0.9 THEN 1 ELSE 0 END) AS valid_records,
+  SUM(CASE WHEN quality_score <  0.9 THEN 1 ELSE 0 END) AS invalid_records,
+  AVG(quality_score)                           AS avg_quality
+FROM clinical_measurements
+GROUP BY study_id;
+```
+
+The measurement_aggregations table is pre-computed summary store for time-series analytics.
+
+- insert into measurement_aggregations table
+
+Periodically (e.g. nightly or hourly), run an aggregation query over processed_measurements to roll up raw rows into daily (or other interval) summaries—counts, averages, mins and maxes—grouped by (aggregation_date, study_id, measurement_type_id).
+
+INSERT or REFRESH those rolls into the measurement_aggregations table.
+
+Expose that table via a dedicated reporting endpoint (e.g. /api/analytics/daily-summary) or build a materialized view on top of it for super-fast dashboard queries.
+
+By separating detailed row-level storage (in processed_measurements) from already-summarized data (in measurement_aggregations), we get both fine-grained auditability and high-performance analytics without overloading database on every user query.
+
+```sql
+-- Populate yesterday’s aggregates into measurement_aggregations
+INSERT INTO measurement_aggregations (
+  aggregation_date,
+  study_id,
+  measurement_type_id,
+  count,
+  avg_value,
+  min_value,
+  max_value
+)
+SELECT
+  (date_trunc('day', pm.recorded_at) - INTERVAL '1 day')::date AS aggregation_date,
+  pm.study_id,
+  pm.measurement_type_id,
+  COUNT(*)              AS count,
+  AVG(pm.measurement_value) AS avg_value,
+  MIN(pm.measurement_value) AS min_value,
+  MAX(pm.measurement_value) AS max_value
+FROM processed_measurements pm
+WHERE
+  pm.recorded_at >= date_trunc('day', NOW() - INTERVAL '1 day')
+  AND pm.recorded_at <  date_trunc('day', NOW())
+GROUP BY 1, 2, 3
+ON CONFLICT (aggregation_date, study_id, measurement_type_id)
+DO UPDATE SET
+  count     = EXCLUDED.count,
+  avg_value = EXCLUDED.avg_value,
+  min_value = EXCLUDED.min_value,
+  max_value = EXCLUDED.max_value;
+
+```
+
 **Your schema should efficiently support these types of analytical queries.**
 
 #### Sample Data
